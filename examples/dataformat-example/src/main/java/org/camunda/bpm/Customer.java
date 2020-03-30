@@ -16,55 +16,83 @@
  */
 package org.camunda.bpm;
 
+import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
-import javax.xml.bind.annotation.XmlRootElement;
+public class Customer implements Serializable {
 
-@XmlRootElement
-public class Customer {
+    private String firstName = "firstName";
+    private String lastName = "lastName";
+    private String gender = "gender";
+    private Integer age = 1;
+    private Boolean isValid = true;
+    private Date validationDate = new Date();
 
-  private String firstName;
-  private String lastName;
-  private String gender;
-  private Integer age;
-  private Boolean isValid;
-  private Date validationDate;
+    private List<Child> child = Arrays.asList(new Child(), new Child());
 
+    public String getFirstName() {
+        return firstName;
+    }
 
-  public String getFirstName() {
-    return firstName;
-  }
-  public void setFirstName(String firstName) {
-    this.firstName = firstName;
-  }
-  public String getLastName() {
-    return lastName;
-  }
-  public void setLastName(String lastName) {
-    this.lastName = lastName;
-  }
-  public String getGender() {
-    return gender;
-  }
-  public void setGender(String gender) {
-    this.gender = gender;
-  }
-  public Integer getAge() {
-    return age;
-  }
-  public void setAge(Integer age) {
-    this.age = age;
-  }
-  public Boolean getIsValid() {
-    return isValid;
-  }
-  public void setIsValid(Boolean isValid) {
-    this.isValid = isValid;
-  }
-  public Date getValidationDate() {
-    return validationDate;
-  }
-  public void setValidationDate(Date validationDate) {
-    this.validationDate = validationDate;
-  }
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
+    public Integer getAge() {
+        return age;
+    }
+
+    public void setAge(Integer age) {
+        this.age = age;
+    }
+
+    public Boolean getIsValid() {
+        return isValid;
+    }
+
+    public void setIsValid(Boolean isValid) {
+        this.isValid = isValid;
+    }
+
+    public Date getValidationDate() {
+        return validationDate;
+    }
+
+    public void setValidationDate(Date validationDate) {
+        this.validationDate = validationDate;
+    }
+
+    public List<Child> getChild() {
+        return child;
+    }
+
+    public void setChild(List<Child> child) {
+        this.child = child;
+    }
+
+    public Boolean getValid() {
+        return isValid;
+    }
+
+    public void setValid(Boolean valid) {
+        isValid = valid;
+    }
 }

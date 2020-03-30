@@ -16,11 +16,9 @@
  */
 package org.camunda.bpm;
 
-import java.io.StringWriter;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.camunda.bpm.client.ExternalTaskClient;
 import org.camunda.bpm.client.task.ExternalTask;
 import org.camunda.bpm.client.topic.TopicSubscriptionBuilder;
@@ -29,86 +27,63 @@ import org.camunda.bpm.client.variable.value.JsonValue;
 import org.camunda.bpm.client.variable.value.XmlValue;
 import org.camunda.bpm.engine.variable.VariableMap;
 import org.camunda.bpm.engine.variable.Variables;
+import org.camunda.bpm.engine.variable.value.ObjectValue;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class App {
-  
-  public static void main(String... args) throws JAXBException {
-    ExternalTaskClient client = ExternalTaskClient.create()
-        .baseUrl("http://localhost:8080/engine-rest/")
-        .asyncResponseTimeout(10000)
-        .disableBackoffStrategy()
-        .disableAutoFetching()
-        .maxTasks(1)
-        .build();
-    
-    ObjectMapper objectMapper = new ObjectMapper();
-    objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-    
-    Marshaller customerMarshaller = JAXBContext.newInstance(Customer.class).createMarshaller();
-    customerMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-    
-    TopicSubscriptionBuilder xmlSubscriptionBuilder = client.subscribe("xmlCustomerCreation")
-      .lockDuration(20000)
-      .handler((externalTask, externalTaskService) -> {
-        Customer customer = createCustomerFromVariables(externalTask);
-        try {
-          StringWriter stringWriter = new StringWriter();
-          customerMarshaller.marshal(customer, stringWriter);
-          String customerXml = stringWriter.toString();
-          VariableMap variables = Variables.createVariables().putValue("customer", ClientValues.xmlValue(customerXml));
-          externalTaskService.complete(externalTask, variables);
-        } catch (JAXBException e) {
-          e.printStackTrace();
-        }
-      });
-    
-    TopicSubscriptionBuilder jsonSubscriptionBuilder = client.subscribe("jsonCustomerCreation")
-      .lockDuration(20000)
-      .handler((externalTask, externlTaskService) -> {
-        Customer customer = createCustomerFromVariables(externalTask);
-        try {
-          String customerJson = objectMapper.writeValueAsString(customer);
-          VariableMap variables = Variables.createVariables().putValue("customer", ClientValues.jsonValue(customerJson));
-          externlTaskService.complete(externalTask, variables);
-        } catch (JsonProcessingException e) {
-          e.printStackTrace();
-        }
-        
-      });
-    
-    TopicSubscriptionBuilder readSubscrptionBuilder = client.subscribe("customerReading")
-      .lockDuration(20000)
-      .handler((externalTask, externalTaskService) -> {
-        String dataformat = externalTask.getVariable("dataFormat");
-        if ("json".equals(dataformat)) {
-          JsonValue jsonCustomer = externalTask.getVariableTyped("customer");
-          System.out.println("Customer json: " + jsonCustomer.getValue());
-        } else if ("xml".equals(dataformat)) {
-          XmlValue xmlCustomer = externalTask.getVariableTyped("customer");
-          System.out.println("Customer xml: " + xmlCustomer.getValue());
-        }
-        externalTaskService.complete(externalTask);
-      });
-    
-    client.start();
-    xmlSubscriptionBuilder.open();
-    jsonSubscriptionBuilder.open();
-    readSubscrptionBuilder.open();
-  }
 
-  private static Customer createCustomerFromVariables(ExternalTask externalTask) {
-    Customer customer = new Customer();
-    customer.setFirstName(externalTask.getVariable("firstname"));
-    customer.setLastName(externalTask.getVariable("lastname"));
-    customer.setGender(externalTask.getVariable("gender"));
-    Long age = externalTask.getVariable("age");
-    customer.setAge(age.intValue());
-    customer.setIsValid(externalTask.getVariable("isValid"));
-    customer.setValidationDate(externalTask.getVariable("validationDate"));
-    return customer;
-  }
+    public static void main(String... args) throws JAXBException {
+        ExternalTaskClient client = ExternalTaskClient.create()
+                .baseUrl("http://localhost:8080/rest/engine/default")
+                .asyncResponseTimeout(15000)
+                .disableBackoffStrategy()
+                .disableAutoFetching()
+                .defaultSerializationFormat(ClientValues.SerializationDataFormats.JAVA.getName())
+                .maxTasks(1)
+                .lockDuration(20000)
+                .build();
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        TopicSubscriptionBuilder jsonSubscriptionBuilder = client.subscribe("customerCreation")
+                .lockDuration(15000)
+                .handler((externalTask, externalTaskService) -> {
+                    try {
+                        List<Object> l = new ArrayList<>();
+                        l.add(new Customer());
+
+                        List rawList = convertToRawList(l);
+
+                        ObjectValue value = ClientValues.objectValue(rawList)
+                                .create();
+
+                        VariableMap variables = Variables.createVariables().putValue("customer", value);
+                        externalTaskService.complete(externalTask, variables);
+
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+
+
+        client.start();
+        jsonSubscriptionBuilder.open();
+    }
+
+    private static List convertToRawList(List<Object> originalList) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        return originalList.stream().map(item -> objectMapper.convertValue(item, Map.class)).collect(Collectors.toList());
+    }
 }

@@ -16,61 +16,64 @@
  */
 package org.camunda.bpm;
 
+import org.apache.http.client.HttpRequestRetryHandler;
+import org.apache.http.protocol.HttpContext;
 import org.camunda.bpm.client.ExternalTaskClient;
 import org.camunda.bpm.client.variable.ClientValues;
 import org.camunda.bpm.engine.variable.value.ObjectValue;
-import org.camunda.bpm.engine.variable.value.TypedValue;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 public class App {
+    public static void main(String... args) {
+        HttpRequestRetryHandler handler = new HttpRequestRetryHandler() {
+            @Override
+            public boolean retryRequest(IOException e, int i, HttpContext httpContext) {
+                return false;
+            }
+        };
 
-  public static void main(String... args) {
-    // bootstrap the client
-    ExternalTaskClient client = ExternalTaskClient.create()
-      .baseUrl("http://localhost:8080/engine-rest")
-      .asyncResponseTimeout(1000)
-      .build();
+        ExternalTaskClient client = ExternalTaskClientCustom
+                .create(handler)
+                .baseUrl("http://localhost:8080/engine-rest")
+                .asyncResponseTimeout(1000)
+                .build();
+        try{
+            client.subscribe("invoiceCreator")
+                    .handler((externalTask, externalTaskService) -> {
 
-    // subscribe to the topic
-    client.subscribe("invoiceCreator")
-      .handler((externalTask, externalTaskService) -> {
+                        // instantiate an invoice object
+                        Invoice invoice = new Invoice("A123");
 
-        // instantiate an invoice object
-        Invoice invoice = new Invoice("A123");
+                        // create an object typed variable with the serialization format XML
+                        ObjectValue invoiceValue = ClientValues
+                                .objectValue(invoice)
+                                .serializationDataFormat("application/xml")
+                                .create();
 
-        // create an object typed variable with the serialization format XML
-        ObjectValue invoiceValue = ClientValues
-          .objectValue(invoice)
-          .serializationDataFormat("application/xml")
-          .create();
+                        // add the invoice object and its id to a map
+                        Map<String, Object> variables = new HashMap<>();
+                        variables.put("invoiceId", invoice.id);
+                        variables.put("invoice", invoiceValue);
 
-        // add the invoice object and its id to a map
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("invoiceId", invoice.id);
-        variables.put("invoice", invoiceValue);
+                        // select the scope of the variables
+                        boolean isRandomSample = Math.random() <= 0.5;
+                        if (isRandomSample) {
+                            externalTaskService.complete(externalTask, variables);
+                        } else {
+                            externalTaskService.complete(externalTask, null, variables);
+                        }
 
-        // select the scope of the variables
-        boolean isRandomSample = Math.random() <= 0.5;
-        if (isRandomSample) {
-          externalTaskService.complete(externalTask, variables);
-        } else {
-          externalTaskService.complete(externalTask, null, variables);
+                        System.out.println("The External Task " + externalTask.getId() +
+                                " has been completed!");
+
+                    }).open();
+        } catch(EngineConnectionException e){
+            e.printStackTrace();
         }
+    }
 
-        System.out.println("The External Task " + externalTask.getId() +
-          " has been completed!");
-
-      }).open();
-    
-    client.subscribe("invoiceArchiver")
-      .handler((externalTask, externalTaskService) -> {
-        TypedValue typedInvoice = externalTask.getVariableTyped("invoice");
-        Invoice invoice = (Invoice) typedInvoice.getValue();
-        System.out.println("Invoice on process scope archived: " + invoice);
-        externalTaskService.complete(externalTask);
-      }).open();
-  }
 
 }
