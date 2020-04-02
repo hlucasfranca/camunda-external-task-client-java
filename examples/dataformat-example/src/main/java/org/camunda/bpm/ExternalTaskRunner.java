@@ -17,23 +17,27 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Component
-public class ExternalTaskRunner
-//        implements CommandLineRunner
-{
+public class ExternalTaskRunner {
 
-//    @Override
-//    public void run(String... args) throws Exception {
-//        start();
-//    }
+    protected Consumer<Void> getSuccessCallback() {
+        return successCallback;
+    }
+
+    protected void setSuccessCallback(Consumer<Void> successCallback) {
+        this.successCallback = successCallback;
+    }
+
+    private Consumer<Void> successCallback;
 
     public void start() {
         ExternalTaskClient client = ExternalTaskClient.create()
                 .baseUrl("http://localhost:10100/rest/engine/default")
                 .asyncResponseTimeout(15000)
-                .disableBackoffStrategy()
+                //.disableBackoffStrategy()
                 .defaultSerializationFormat(ClientValues.SerializationDataFormats.JAVA.getName())
                 .maxTasks(1)
                 .lockDuration(20000)
@@ -61,6 +65,10 @@ public class ExternalTaskRunner
                         variables.put("valorLista", value);
                         externalTaskService.complete(externalTask, variables);
 
+                        if(successCallback != null){
+                            successCallback.accept(null);
+                        }
+
                     } catch (JsonProcessingException e) {
                         e.printStackTrace();
                     } catch (IOException e) {
@@ -72,6 +80,8 @@ public class ExternalTaskRunner
         client.start();
         jsonSubscriptionBuilder.open();
     }
+
+
 
     private static Object convertToRawList(Object originalList) throws IOException {
         ObjectMapper objectMapper = new ObjectMapper();
